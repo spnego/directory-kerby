@@ -25,7 +25,6 @@ import org.apache.kerby.kerberos.kerb.KrbException;
 import org.apache.kerby.kerberos.kerb.admin.kadmin.local.LocalKadminImpl;
 import org.apache.kerby.kerberos.kerb.server.KdcSetting;
 import org.codehaus.jettison.json.JSONArray;
-import org.codehaus.jettison.json.JSONObject;
 
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
@@ -45,6 +44,7 @@ import java.util.List;
 /**
  * Kadmin web methods implementation.
  */
+@Path("/kadmin")
 public class KadminApi {
     @Context
     private ServletContext context;
@@ -97,12 +97,11 @@ public class KadminApi {
     }
 
     @GET
-    @Path("/getprincipals")
+    @Path("/listprincipals")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getprincipals(@QueryParam("exp") String exp) {
+    public Response listPrincipals(@QueryParam("exp") String exp) {
         if (httpRequest.isSecure()) {
             WebServer.LOG.info("Request to get principals.");
-            JSONObject result = new JSONObject();
             String msg;
             LocalKadminImpl localKadmin;
             HasServer hasServer = WebServer.getHasServerFromContext(context);
@@ -111,7 +110,7 @@ public class KadminApi {
                 localKadmin = new LocalKadminImpl(serverSetting);
             } catch (KrbException e) {
                 msg = "Failed to create local kadmin." + e.getMessage();
-                WebServer.LOG.info(msg);
+                WebServer.LOG.error(msg);
                 return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(msg).build();
             }
             try {
@@ -121,9 +120,7 @@ public class KadminApi {
                     principals.put(princ);
                 }
                 WebServer.LOG.info("Success to get principals with JSON.");
-                result.put("result", "success");
-                result.put("msg", principals.toString());
-                return Response.ok(result.toString()).build();
+                return Response.ok(principals.toString()).build();
             } catch (Exception e) {
                 msg = "Failed to get principals,because : " + e.getMessage();
                 WebServer.LOG.error(msg);
@@ -143,7 +140,7 @@ public class KadminApi {
     @POST
     @Path("/addprincipal")
     @Produces(MediaType.TEXT_PLAIN)
-    public Response addprincipal(@QueryParam(PrincipalParam.NAME) @DefaultValue(PrincipalParam.DEFAULT)
+    public Response addPrincipal(@QueryParam(PrincipalParam.NAME) @DefaultValue(PrincipalParam.DEFAULT)
                                  final PrincipalParam principal,
                                  @QueryParam(PasswordParam.NAME) @DefaultValue(PasswordParam.DEFAULT)
                                  final PasswordParam password) {
@@ -157,20 +154,34 @@ public class KadminApi {
                 localKadmin = new LocalKadminImpl(serverSetting);
             } catch (KrbException e) {
                 msg = "Failed to create local kadmin." + e.getMessage();
-                WebServer.LOG.info(msg);
-                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(msg).build();
-            }
-            JSONObject result = new JSONObject();
-            try {
-                localKadmin.addPrincipal(principal.getValue(), password.getValue());
-                msg = "Add principal successfully.";
-                result.put("result", "success");
-                result.put("msg", msg);
-                return Response.ok(result.toString()).build();
-            } catch (Exception e) {
-                msg = "Failed to add " + principal + " principal, because: " + e.getMessage();
                 WebServer.LOG.error(msg);
                 return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(msg).build();
+            }
+            if (principal.getValue() == null) {
+                msg = "Value of principal is null.";
+                WebServer.LOG.error(msg);
+                return Response.status(Response.Status.BAD_REQUEST).entity(msg).build();
+            }
+            if (password.getValue() == null || password.getValue().equals("")) {
+                try {
+                    localKadmin.addPrincipal(principal.getValue());
+                    msg = "Add principal successfully.";
+                    return Response.ok(msg).build();
+                } catch (KrbException e) {
+                    msg = "Failed to add " + principal + " principal, because: " + e.getMessage();
+                    WebServer.LOG.error(msg);
+                    return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(msg).build();
+                }
+            } else {
+                try {
+                    localKadmin.addPrincipal(principal.getValue(), password.getValue());
+                    msg = "Add principal successfully.";
+                    return Response.ok(msg).build();
+                } catch (KrbException e) {
+                    msg = "Failed to add " + principal + " principal, because: " + e.getMessage();
+                    WebServer.LOG.error(msg);
+                    return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(msg).build();
+                }
             }
         }
         return Response.status(Response.Status.FORBIDDEN).entity("HTTPS required.\n").build();
@@ -183,7 +194,6 @@ public class KadminApi {
                                     @QueryParam("newprincipal") String newPrincipal) {
         if (httpRequest.isSecure()) {
             WebServer.LOG.info("Request to rename " + oldPrincipal + " to " + newPrincipal);
-            JSONObject result = new JSONObject();
             String msg;
             if (oldPrincipal != null && newPrincipal != null) {
                 LocalKadminImpl localKadmin;
@@ -200,9 +210,7 @@ public class KadminApi {
                 try {
                     localKadmin.renamePrincipal(oldPrincipal, newPrincipal);
                     msg = "Rename principal successfully.";
-                    result.put("result", "success");
-                    result.put("msg", msg);
-                    return Response.ok(result.toString()).build();
+                    return Response.ok(msg).build();
                 } catch (Exception e) {
                     msg = "Failed to rename principal " + oldPrincipal + " to "
                         + newPrincipal + ",because: " + e.getMessage();
@@ -227,11 +235,10 @@ public class KadminApi {
     @DELETE
     @Path("/deleteprincipal")
     @Produces(MediaType.TEXT_PLAIN)
-    public Response deleteprincipal(@QueryParam(PrincipalParam.NAME) @DefaultValue(PrincipalParam.DEFAULT)
+    public Response deletePrincipal(@QueryParam(PrincipalParam.NAME) @DefaultValue(PrincipalParam.DEFAULT)
                                     final PrincipalParam principal) {
         if (httpRequest.isSecure()) {
             WebServer.LOG.info("Request to delete the principal named " + principal.getValue());
-            JSONObject result = new JSONObject();
             String msg;
             LocalKadminImpl localKadmin;
             HasServer hasServer = WebServer.getHasServerFromContext(context);
@@ -247,9 +254,7 @@ public class KadminApi {
             try {
                 localKadmin.deletePrincipal(principal.getValue());
                 msg = "Delete principal successfully.";
-                result.put("result", "success");
-                result.put("msg", msg);
-                return Response.ok(result.toString()).build();
+                return Response.ok(msg).build();
             } catch (Exception e) {
                 msg = "Failed to delete the principal named " + principal.getValue()
                     + ",because : " + e.getMessage();
@@ -257,6 +262,6 @@ public class KadminApi {
                 return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(msg).build();
             }
         }
-        return Response.status(403).entity("HTTPS required.\n").build();
+        return Response.status(Response.Status.FORBIDDEN).entity("HTTPS required.\n").build();
     }
 }

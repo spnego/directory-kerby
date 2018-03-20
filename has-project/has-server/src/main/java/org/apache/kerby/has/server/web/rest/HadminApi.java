@@ -54,7 +54,7 @@ import java.util.zip.ZipOutputStream;
 /**
  * HAS Admin web methods implementation.
  */
-@Path("/admin")
+@Path("/hadmin")
 public class HadminApi {
 
     @Context
@@ -94,8 +94,7 @@ public class HadminApi {
             } catch (KrbException e) {
                 WebServer.LOG.info("Failed to create local hadmin." + e.getMessage());
             }
-            JSONObject result = new JSONObject();
-            String msg = "";
+            StringBuilder msg = new StringBuilder();
             try {
                 StringBuilder data = new StringBuilder();
                 BufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()));
@@ -109,16 +108,14 @@ public class HadminApi {
                     JSONObject host = (JSONObject) hostArray.get(i);
                     String[] roles = host.getString("hostRoles").split(",");
                     for (String role : roles) {
-                        msg += hasAdmin.addPrincByRole(host.getString("name"), role.toUpperCase());
+                        msg.append(hasAdmin.addPrincByRole(host.getString("name"), role.toUpperCase()));
                     }
                 }
-                result.put("result", "success");
-                result.put("msg", msg);
-                return Response.ok(result.toString()).build();
+                return Response.ok(msg).build();
             } catch (Exception e) {
                 WebServer.LOG.error("Failed to create principals,because : " + e.getMessage());
-                msg = "Failed to create principals,because : " + e.getMessage();
-                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(msg).build();
+                String error = "Failed to create principals,because : " + e.getMessage();
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(error).build();
             }
         }
         return Response.status(Response.Status.FORBIDDEN).entity("HTTPS required.\n").build();

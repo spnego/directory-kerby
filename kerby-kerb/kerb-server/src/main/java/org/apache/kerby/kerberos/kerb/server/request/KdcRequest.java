@@ -220,17 +220,15 @@ public abstract class KdcRequest {
                 if (paEntry.getPaDataType() == PaDataType.FX_FAST) {
                     LOG.info("Found fast padata and starting to process it.");
 
-                    PaFxFastRequest paFxFastRequest = new PaFxFastRequest();
-                    KrbFastArmoredReq fastArmoredReq = null;
+                    PaFxFastRequest paFxFastRequest = null;
                     try {
-                        paFxFastRequest = KrbCodec.decode(paEntry.getPaDataValue(),
-                            PaFxFastRequest.class);
+                        paFxFastRequest = KrbCodec.decode(paEntry.getPaDataValue(), PaFxFastRequest.class);
                     } catch (KrbException e) {
                         String errMessage = "Decode PaFxFastRequest failed. " + e.getMessage();
                         LOG.error(errMessage);
                         throw new KrbException(errMessage);
                     }
-                    fastArmoredReq = paFxFastRequest.getFastArmoredReq();
+                    KrbFastArmoredReq fastArmoredReq = paFxFastRequest.getFastArmoredReq();
                     if (fastArmoredReq == null) {
                         return;
                     }
@@ -861,9 +859,7 @@ public abstract class KdcRequest {
      * @return krb identity entry
      */
     protected KrbIdentity getEntry(String principal) throws KrbException {
-        KrbIdentity entry;
-        entry = kdcContext.getIdentityService().getIdentity(principal);
-        return entry;
+        return kdcContext.getIdentityService().getIdentity(principal);
     }
 
     /**

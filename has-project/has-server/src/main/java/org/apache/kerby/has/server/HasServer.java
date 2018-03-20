@@ -106,7 +106,7 @@ public class HasServer {
         try {
             kdcServer = new KdcServer(confDir);
         } catch (KrbException e) {
-            throw new HasException("Failed to create KdcServer. " + e);
+            throw new HasException("Failed to create KdcServer. " + e.getMessage());
         }
         kdcServer.setWorkDir(workDir);
         kdcServer.setInnerKdcImpl(new NettyKdcServerImpl(kdcServer.getKdcSetting()));
@@ -117,11 +117,11 @@ public class HasServer {
             throw new HasException("Errors occurred when init has kdc server:  " + e.getMessage());
         }
 
-        KrbConfig krbConfig = null;
+        KrbConfig krbConfig;
         try {
             krbConfig = ClientUtil.getConfig(confDir);
         } catch (KrbException e) {
-            new HasException("Errors occurred when getting the config from conf dir. "
+            throw new HasException("Errors occurred when getting the config from conf dir. "
                 + e.getMessage());
         }
         if (krbConfig == null) {
@@ -131,14 +131,34 @@ public class HasServer {
         try {
             kdcServer.start();
         } catch (KrbException e) {
-            throw new HasException("Failed to start kdc server. " + e);
+            throw new HasException("Failed to start kdc server. " + e.getMessage());
         }
         try {
             HasUtil.setEnableConf(new File(confDir, "has-server.conf"), "false");
         } catch (Exception e) {
-            throw new HasException("Failed to enable conf. " + e);
+            throw new HasException("Failed to enable conf. " + e.getMessage());
         }
         setHttpFilter();
+    }
+
+    public File initKdcServer() throws KrbException {
+        File adminKeytabFile = new File(workDir, "admin.keytab");
+        if (kdcServer == null) {
+            throw new KrbException("Please start KDC server first.");
+        }
+        LocalKadmin kadmin = new LocalKadminImpl(kdcServer.getKdcSetting(),
+            kdcServer.getIdentityService());
+        if (adminKeytabFile.exists()) {
+            throw new KrbException("KDC Server is already inited.");
+        }
+        kadmin.createBuiltinPrincipals();
+        kadmin.exportKeytab(adminKeytabFile, kadmin.getKadminPrincipal());
+        System.out.println("The keytab for kadmin principal "
+            + " has been exported to the specified file "
+            + adminKeytabFile.getAbsolutePath() + ", please safely keep it, "
+            + "in order to use kadmin tool later");
+
+        return adminKeytabFile;
     }
 
     private void setHttpFilter() throws HasException {
@@ -203,54 +223,50 @@ public class HasServer {
             // Parse has-server.conf to get http_host and http_port
             File confFile = new File(confDir, "has-server.conf");
             hasConfig = HasUtil.getHasConfig(confFile);
-            if (hasConfig != null) {
-                try {
-                    String httpHost;
-                    String httpPort;
-                    String httpsHost;
-                    String httpsPort;
-                    if (hasConfig.getHttpHost() != null) {
-                        httpHost = hasConfig.getHttpHost();
-                    } else {
-                        LOG.info("Cannot get the http_host from has-server.conf, using the default http host.");
-                        httpHost = WebConfigKey.HAS_HTTP_HOST_DEFAULT;
-                    }
-                    if (hasConfig.getHttpPort() != null) {
-                        httpPort = hasConfig.getHttpPort();
-                    } else {
-                        LOG.info("Cannot get the http_port from has-server.conf, using the default http port.");
-                        httpPort = String.valueOf(WebConfigKey.HAS_HTTP_PORT_DEFAULT);
-                    }
-                    if (hasConfig.getHttpsHost() != null) {
-                        httpsHost = hasConfig.getHttpsHost();
-                    } else {
-                        LOG.info("Cannot get the https_host from has-server.conf, using the default https host.");
-                        httpsHost = WebConfigKey.HAS_HTTPS_HOST_DEFAULT;
-                    }
-                    if (hasConfig.getHttpsPort() != null) {
-                        httpsPort = hasConfig.getHttpsPort();
-                    } else {
-                        LOG.info("Cannot get the https_port from has-server.conf , using the default https port.");
-                        httpsPort = String.valueOf(WebConfigKey.HAS_HTTPS_PORT_DEFAULT);
-                    }
-                    String hasHttpAddress = httpHost + ":" + httpPort;
-                    String hasHttpsAddress = httpsHost + ":" + httpsPort;
-                    LOG.info("The web server http address: " + hasHttpAddress);
-                    LOG.info("The web server https address: " + hasHttpsAddress);
-
-                    conf.setString(WebConfigKey.HAS_HTTP_ADDRESS_KEY, hasHttpAddress);
-                    conf.setString(WebConfigKey.HAS_HTTPS_ADDRESS_KEY, hasHttpsAddress);
-                    conf.setString(WebConfigKey.HAS_HTTP_POLICY_KEY,
-                        HttpConfig.Policy.HTTP_AND_HTTPS.name());
-                    conf.setString(WebConfigKey.HAS_SERVER_HTTPS_KEYSTORE_RESOURCE_KEY,
-                        hasConfig.getSslServerConf());
-                    webServer = new WebServer(conf);
-                } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException("https_port should be a number. "
-                        + e.getMessage());
+            try {
+                String httpHost;
+                String httpPort;
+                String httpsHost;
+                String httpsPort;
+                if (hasConfig.getHttpHost() != null) {
+                    httpHost = hasConfig.getHttpHost();
+                } else {
+                    LOG.info("Cannot get the http_host from has-server.conf, using the default http host.");
+                    httpHost = WebConfigKey.HAS_HTTP_HOST_DEFAULT;
                 }
-            } else {
-                throw new HasException("has-server.conf not found in " + confDir + ". ");
+                if (hasConfig.getHttpPort() != null) {
+                    httpPort = hasConfig.getHttpPort();
+                } else {
+                    LOG.info("Cannot get the http_port from has-server.conf, using the default http port.");
+                    httpPort = String.valueOf(WebConfigKey.HAS_HTTP_PORT_DEFAULT);
+                }
+                if (hasConfig.getHttpsHost() != null) {
+                    httpsHost = hasConfig.getHttpsHost();
+                } else {
+                    LOG.info("Cannot get the https_host from has-server.conf, using the default https host.");
+                    httpsHost = WebConfigKey.HAS_HTTPS_HOST_DEFAULT;
+                }
+                if (hasConfig.getHttpsPort() != null) {
+                    httpsPort = hasConfig.getHttpsPort();
+                } else {
+                    LOG.info("Cannot get the https_port from has-server.conf , using the default https port.");
+                    httpsPort = String.valueOf(WebConfigKey.HAS_HTTPS_PORT_DEFAULT);
+                }
+                String hasHttpAddress = httpHost + ":" + httpPort;
+                String hasHttpsAddress = httpsHost + ":" + httpsPort;
+                LOG.info("The web server http address: " + hasHttpAddress);
+                LOG.info("The web server https address: " + hasHttpsAddress);
+
+                conf.setString(WebConfigKey.HAS_HTTP_ADDRESS_KEY, hasHttpAddress);
+                conf.setString(WebConfigKey.HAS_HTTPS_ADDRESS_KEY, hasHttpsAddress);
+                conf.setString(WebConfigKey.HAS_HTTP_POLICY_KEY,
+                    HttpConfig.Policy.HTTP_AND_HTTPS.name());
+                conf.setString(WebConfigKey.HAS_SERVER_HTTPS_KEYSTORE_RESOURCE_KEY,
+                    hasConfig.getSslServerConf());
+                webServer = new WebServer(conf);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("https_port should be a number. "
+                    + e.getMessage());
             }
         } else {
             hasConfig = webServer.getConf();

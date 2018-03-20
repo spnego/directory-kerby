@@ -28,6 +28,7 @@ import org.apache.hadoop.security.authentication.server.KerberosAuthenticationHa
 import org.apache.kerby.has.common.HasConfig;
 import org.apache.kerby.has.common.HasException;
 import org.apache.kerby.has.server.HasServer;
+import org.apache.kerby.has.server.web.rest.AsRequestApi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,6 +59,16 @@ public class WebServer {
         return conf;
     }
 
+    private void init() {
+
+        final String pathSpec = "/has/v1/*";
+
+        // add has packages
+        httpServer.addJerseyResourcePackage(AsRequestApi.class
+                .getPackage().getName(),
+            pathSpec);
+    }
+
     public void defineFilter() {
         String authType = conf.getString(WebConfigKey.HAS_AUTHENTICATION_FILTER_AUTH_TYPE);
         if (authType.equals("kerberos")) {
@@ -70,9 +81,10 @@ public class WebServer {
 
             Map<String, String> params = getAuthFilterParams(conf);
 
-            String adminPathSpec = "/has/v1/admin/*";
+            String kadminPathSpec = "/has/v1/kadmin/*";
+            String hadminPathSpec = "/has/v1/hadmin/*";
             HttpServer2.defineFilter(httpServer.getWebAppContext(), name, className,
-                params, new String[]{adminPathSpec});
+                params, new String[]{kadminPathSpec, hadminPathSpec});
             HttpServer2.LOG.info("Added filter '" + name + "' (class=" + className
                 + ")");
         }
@@ -169,6 +181,8 @@ public class WebServer {
         } catch (IOException e) {
             throw new HasException("Errors occurred when building http server. " + e.getMessage());
         }
+
+        init();
 
         try {
             httpServer.start();

@@ -50,9 +50,10 @@ public class HasUtil {
                     + hasConfFile.getAbsolutePath());
             }
             return hasConfig;
+        } else {
+            throw new HasException(hasConfFile.getName() + "not found in "
+                + hasConfFile.getParent() + ". ");
         }
-
-        return null;
     }
 
     public static void setEnableConf(File hasConfFile, String value)
@@ -74,9 +75,10 @@ public class HasUtil {
                 }
                 sb.append(tempString + "\n");
             }
-            PrintStream ps = new PrintStream(new FileOutputStream(hasConfFile));
-            ps.print(sb.toString());
-            bf.close();
+            try (PrintStream ps = new PrintStream(new FileOutputStream(hasConfFile))) {
+                ps.print(sb.toString());
+                bf.close();
+            }
         } catch (FileNotFoundException e) {
             throw new HasException("Can not load the has configuration file "
                     + hasConfFile.getAbsolutePath());

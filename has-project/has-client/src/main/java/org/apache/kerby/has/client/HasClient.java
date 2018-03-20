@@ -56,7 +56,6 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -122,19 +121,19 @@ public class HasClient {
                 config = HasUtil.getHasConfig(confFile);
             } catch (HasException e) {
                 LOG.error("Failed to get has client config: " + e.getMessage());
-                throw new HasException("Failed to get has client config: " + e);
+                throw new HasException("Failed to get has client config: " + e.getMessage());
             }
         } else {
             config = new HasConfig();
             String[] urls = hadoopSecurityHas.split(";");
-            String host = "";
+            StringBuilder host = new StringBuilder();
             int port = 0;
             try {
                 for (String url : urls) {
                     URI uri = new URI(url.trim());
 
                     // parse host
-                    host = host + uri.getHost() + ",";
+                    host.append(uri.getHost()).append(",");
 
                     // parse port
                     if (port == 0) {
@@ -157,11 +156,10 @@ public class HasClient {
                         }
                     }
                 }
-                if (host == null || port == 0) {
+                if (host.length() == 0 || port == 0) {
                     throw new HasException("host is null.");
                 } else {
-                    host = host.substring(0, host.length() - 1);
-                    config.setString(HasConfigKey.HTTPS_HOST, host);
+                    config.setString(HasConfigKey.HTTPS_HOST,  host.subSequence(0, host.length() - 1).toString());
                     config.setInt(HasConfigKey.HTTPS_PORT, port);
                     config.setString(HasConfigKey.AUTH_TYPE, type);
                 }
@@ -202,24 +200,21 @@ public class HasClient {
         }
         type = plugin.getLoginType();
 
-        LOG.info("The plugin type is: " + type);
+        LOG.debug("The plugin type is: " + type);
 
         return requestTgt(authToken, type, config);
     }
 
     private HasClientPlugin getClientTokenPlugin(HasConfig config) throws HasException {
         String pluginName = config.getPluginName();
-        LOG.info("The plugin name getting from config is: " + pluginName);
+        LOG.debug("The plugin name getting from config is: " + pluginName);
         HasClientPlugin clientPlugin;
         if (pluginName != null) {
             clientPlugin = HasClientPluginRegistry.createPlugin(pluginName);
         } else {
             throw new HasException("Please set the plugin name in has client conf");
         }
-        if (clientPlugin == null) {
-            throw new HasException("Failed to create client plugin: " + pluginName);
-        }
-        LOG.info("The plugin class is: " + clientPlugin);
+        LOG.debug("The plugin class is: " + clientPlugin);
 
         return clientPlugin;
     }
@@ -365,11 +360,11 @@ public class HasClient {
             String httpHost = config.getHttpHost();
             String httpPort = config.getHttpPort();
             if (httpHost == null) {
-                LOG.info("Can't find the http host in config, the https host will be used.");
+                LOG.warn("Can't find the http host in config, the https host will be used.");
                 httpHost = config.getHttpsHost();
             }
             if (httpPort == null) {
-                LOG.info("Can't find the http port in config, the default http port will be used.");
+                LOG.warn("Can't find the http port in config, the default http port will be used.");
                 httpPort = HAS_HTTP_PORT_DEFAULT;
             }
             X509Certificate certificate = getCertificate(httpHost, httpPort);
@@ -476,7 +471,7 @@ public class HasClient {
         kdcRep.setEncPart(encKdcRepPart);
 
         TgtTicket tgtTicket = getTicket(kdcRep);
-        LOG.info("Ticket expire time: " + tgtTicket.getEncKdcRepPart().getEndTime());
+        LOG.debug("Ticket expire time: " + tgtTicket.getEncKdcRepPart().getEndTime());
         return tgtTicket;
 
     }
@@ -559,9 +554,10 @@ public class HasClient {
             }
 
             CertificateFactory factory = CertificateFactory.getInstance("X.509");
-            FileInputStream in = new FileInputStream(caRootFile);
-            caRoot = (X509Certificate) factory.generateCertificate(in);
-        } catch (CertificateException | FileNotFoundException e) {
+            try (FileInputStream in = new FileInputStream(caRootFile)) {
+                caRoot = (X509Certificate) factory.generateCertificate(in);
+            }
+        } catch (CertificateException | IOException e) {
             throw new HasException("Failed to get certificate from ca root file", e);
         }
 
