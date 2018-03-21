@@ -103,20 +103,31 @@ public abstract class AbstractInternalKrbClient implements InternalKrbClient {
                     "No valid krb client request option found");
         }
 
+        boolean enterprisePrincipalName =
+                requestOptions.contains(KrbOption.AS_ENTERPRISE_PN);
+
         if (requestOptions.contains(KrbOption.CLIENT_PRINCIPAL)) {
             String clientPrincipalString = requestOptions.getStringOption(KrbOption.CLIENT_PRINCIPAL);
-            clientPrincipalString = fixPrincipal(clientPrincipalString);
-            clientPrincipalName = new PrincipalName(clientPrincipalString);
-            if (requestOptions.contains(PkinitOption.USE_ANONYMOUS)) {
-                clientPrincipalName.setNameType(NameType.NT_WELLKNOWN);
+            if (enterprisePrincipalName) {
+                clientPrincipalName = new PrincipalName(clientPrincipalString, NameType.NT_ENTERPRISE);
+            } else {
+                clientPrincipalString = fixPrincipal(clientPrincipalString);
+                clientPrincipalName = new PrincipalName(clientPrincipalString);
+                if (requestOptions.contains(PkinitOption.USE_ANONYMOUS)) {
+                    clientPrincipalName.setNameType(NameType.NT_WELLKNOWN);
+                }
             }
             asRequest.setClientPrincipal(clientPrincipalName);
         }
 
         if (requestOptions.contains(KrbOption.SERVER_PRINCIPAL)) {
             String serverPrincipalString = requestOptions.getStringOption(KrbOption.SERVER_PRINCIPAL);
-            serverPrincipalString = fixPrincipal(serverPrincipalString);
-            PrincipalName serverPrincipalName = new PrincipalName(serverPrincipalString, NameType.NT_PRINCIPAL);
+            PrincipalName serverPrincipalName;
+            if (enterprisePrincipalName) {
+                serverPrincipalName = new PrincipalName(serverPrincipalString, NameType.NT_ENTERPRISE);
+            } else {
+                serverPrincipalName = new PrincipalName(fixPrincipal(serverPrincipalString), NameType.NT_PRINCIPAL);
+            }
             asRequest.setServerPrincipal(serverPrincipalName);
         } else if (clientPrincipalName != null) {
             String realm = clientPrincipalName.getRealm();

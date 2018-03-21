@@ -88,7 +88,7 @@ public class PrincipalName extends KrbSequenceType {
             new ExplicitField(PrincipalNameField.NAME_TYPE, Asn1Integer.class),
             new ExplicitField(PrincipalNameField.NAME_STRING, KerberosStrings.class)
     };
-    
+
     /** The PrincipalName's realm */
     private String realm;
 
@@ -105,9 +105,7 @@ public class PrincipalName extends KrbSequenceType {
      * @param nameString The PrincipalName as a String
      */
     public PrincipalName(String nameString) {
-        super(fieldInfos);
-        setNameType(NameType.NT_PRINCIPAL);
-        fromNameString(nameString);
+        this(nameString, NameType.NT_PRINCIPAL);
     }
 
     /**
@@ -118,7 +116,7 @@ public class PrincipalName extends KrbSequenceType {
      */
     public PrincipalName(String nameString, NameType type) {
         super(fieldInfos);
-        fromNameString(nameString);
+        fromNameString(nameString, type);
         setNameType(type);
     }
 
@@ -137,10 +135,13 @@ public class PrincipalName extends KrbSequenceType {
 
     /**
      * Get the Realm from the name.
+     *
+     * Doesn't work correctly for {@link NameType#NT_ENTERPRISE} names
      * 
      * @param principal The PrincipalName from which we want to extract the Realm
      * @return The extracted Realm
      */
+    @Deprecated
     public static String extractRealm(String principal) {
         int pos = principal.indexOf('@');
 
@@ -152,11 +153,14 @@ public class PrincipalName extends KrbSequenceType {
     }
 
     /**
-     * Get the name part of the PrincipalName, ie, discading the realm part of it.
+     * Get the name part of the PrincipalName, ie, discarding the realm part of it.
+     *
+     * Doesn't work correctly for {@link NameType#NT_ENTERPRISE} names
      * 
      * @param principal The PrincipalName to split
      * @return The extracted components (primary/instances)
      */
+    @Deprecated
     public static String extractName(String principal) {
         int pos = principal.indexOf('@');
 
@@ -232,6 +236,14 @@ public class PrincipalName extends KrbSequenceType {
     }
 
     /**
+     * Stores the components of a PrincipalName into the associated ASN1 structure
+     * @param nameStrings The PrincipalName's components
+     */
+    public void setNameStrings(String... nameStrings) {
+        setNameStrings(Arrays.asList(nameStrings));
+    }
+
+    /**
      * @return The PrincipalName's Realm
      */
     public String getRealm() {
@@ -271,7 +283,7 @@ public class PrincipalName extends KrbSequenceType {
             sb.append(name);
         }
 
-        if (realm != null && !realm.isEmpty()) {
+        if (realm != null && !realm.isEmpty() && NameType.NT_ENTERPRISE != getNameType()) {
             sb.append('@');
             sb.append(realm);
         }
@@ -285,16 +297,16 @@ public class PrincipalName extends KrbSequenceType {
      * 
      * Note : we will have only one instance, AFAICT...
      */
-    private void fromNameString(String nameString) {
+    private void fromNameString(String nameString, NameType nameType) {
         if (nameString == null) {
             return;
         }
         
-        List<String> nameStrings;
-        int realmPos = nameString.indexOf('@');
         String nameParts;
-        
-        if (realmPos != -1) {
+
+        int realmPos = nameString.indexOf('@');
+
+        if (realmPos != -1 && NameType.NT_ENTERPRISE != nameType) {
             nameParts = nameString.substring(0, realmPos);
             realm = nameString.substring(realmPos + 1);
         } else {
@@ -302,9 +314,8 @@ public class PrincipalName extends KrbSequenceType {
         }
         
         String[] parts = nameParts.split("\\/");
-        nameStrings = Arrays.asList(parts);
 
-        setNameStrings(nameStrings);
+        setNameStrings(parts);
     }
 
     /**
@@ -312,7 +323,10 @@ public class PrincipalName extends KrbSequenceType {
      */
     @Override
     public int hashCode() {
-        return getName().hashCode();
+        int result = getNameType().hashCode();
+        result = 31 * result + getName().hashCode();
+        result = 31 * result + (realm != null ? realm.hashCode() : 0);
+        return result;
     }
 
     /**
